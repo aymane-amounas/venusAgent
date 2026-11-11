@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in Venus Agent does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Security problem? Do not file it here. Use a [private report](https://github.com/aymane-amounas/venusAgent/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `venus-agent --version`
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS and architecture, Rust version (`rustc --version`), provider and model (e.g. Ollama qwen2.5-coder:3b)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Command you ran and its full output. Remove API keys and private file contents.
+      render: text

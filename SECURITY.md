@@ -6,7 +6,7 @@ Only the current default branch is supported until the project publishes tagged 
 
 ## Reporting a vulnerability
 
-Please do not report exploitable vulnerabilities in a public issue. On GitHub, use the repository's **Security → Advisories → Report a vulnerability** flow if private vulnerability reporting is enabled. Its availability has not been verified for this repository; maintainers should enable it before inviting external security testing. If the private report flow is unavailable, contact the repository owner privately through [GitHub](https://github.com/aymane-amounas) and request a secure reporting channel. Do not include exploit details in a public issue.
+Please do not report exploitable vulnerabilities in a public issue. Report it privately through **Security → Report a vulnerability** on this repository ([direct link](https://github.com/aymane-amounas/venusAgent/security/advisories/new)); private vulnerability reporting is enabled. Do not include exploit details in a public issue.
 
 Include the affected version or commit, impact, reproduction conditions, and any suggested mitigation. Do not include real credentials, personal data, or data belonging to another person.
 
