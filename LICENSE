@@ -1,0 +1,137 @@
+Aymane Amounas Noncommercial Attribution License 1.0
+
+Copyright 2026 Aymane Amounas
+
+Project: Venus Agent (venusAgent)
+Repository: https://github.com/aymane-amounas/venusAgent
+
+1. Definitions
+
+"Software" means the portions of the Venus Agent project that are owned by the
+copyright holder and are offered under this license. It does not include
+third-party components, which remain under their respective licenses.
+
+"You" means the individual or entity exercising rights under this license.
+"Copyright holder" means Aymane Amounas, to the extent of rights held.
+
+"Commercial Activity" means activity carried out to earn revenue, support
+revenue-generating operations, or develop, market, or provide goods or
+services for financial gain. It also includes activity that supports the
+operations of a for-profit business even when that particular activity is not
+itself sold or paid for.
+
+"Employer-Sponsored Use" means use requested, directed, approved, funded,
+reimbursed, or otherwise sponsored by an employer, or use incorporated into
+the employer's work product or operations. It remains employer-sponsored
+regardless of whose equipment or time is used.
+
+"Commercial Use" means any use, reproduction, modification, integration, or
+distribution undertaken for, at the request of, on behalf of, or sponsored by a
+commercial activity, or that directly or indirectly benefits a commercial
+activity or the business operations of a for-profit entity. This includes
+internal business use; Employer-Sponsored Use; use connected with employment
+or client work; use to develop, provide, support, or promote a product or
+service for financial gain; and use to sell, license, monetize, or provide
+paid access to the Software or a work incorporating it. Commercial Use is
+prohibited unless you have a separate written agreement with the copyright
+holder authorizing it.
+
+"Personal Employee Use" means an individual's use on their personal computer
+and personal time solely for private learning, study, research, or hobby
+experimentation, with no connection to employer work and without using
+employer resources, accounts, or data, producing work product for an employer,
+or directly or indirectly benefiting or serving an employer's business. It is
+not Employer-Sponsored Use.
+
+"Substantial Portions" means all or a material portion of the Software, whether
+used directly, modified, or incorporated into another work.
+
+2. Noncommercial Permission
+
+Subject to this license, the copyright holder grants you a worldwide,
+non-exclusive, royalty-free permission to use, reproduce, study, modify, create
+derivative works from, integrate, and redistribute the Software and
+Substantial Portions of it, solely for noncommercial purposes.
+
+Personal, educational, research, and hobby use, including modification and
+redistribution, is permitted only when it is noncommercial. These examples do
+not permit Commercial Use, including use by a business for its own operations.
+Personal Employee Use is noncommercial and permitted. A person's employment by
+a business, by itself, does not make that person's independent Personal Employee
+Use Commercial Use. This permission does not extend to employer-sponsored
+experimentation or any use connected to employer work, resources, accounts,
+data, or benefit.
+
+Any redistribution must be noncommercial, include a copy of this license, and
+retain all copyright, attribution, and license notices included with the
+Software. You may not impose terms on the Software that remove or limit the
+rights this license grants.
+
+3. Attribution and downstream distributions
+
+If you modify or integrate Substantial Portions of the Software, preserve the
+copyright, attribution, and license notices in the source files. If you
+distribute source code or binaries containing Substantial Portions, you must
+provide the following attribution with each distribution:
+
+    Based on Venus Agent (venusAgent) by Aymane Amounas
+    https://github.com/aymane-amounas/venusAgent
+
+For source distributions, include a copy of this license, retain existing
+copyright, attribution, and license notices in the source files, and put the
+attribution in documentation distributed with the source, if any. If no such
+documentation is distributed, include an accompanying credits or notices file.
+
+For binary distributions, include a copy of this license as an accompanying
+license file or in a notices document. Put the attribution in the application's
+About or Credits section, if it has one, and in documentation distributed with
+the binary, if any. If neither an About or Credits section nor accompanying
+documentation exists, include an accompanying credits or notices file with the
+binary.
+
+These requirements apply when the Software is integrated into another
+application: downstream source and binary distributions must carry the
+attribution with them as described above. Do not remove or obscure existing
+notices.
+
+4. Commercial Permission
+
+This license grants no permission for Commercial Use. Any Commercial Use
+requires a separate written agreement with the copyright holder, entered into
+before the Commercial Use begins. No course of dealing or public availability
+grants commercial rights.
+
+5. Third-Party Material
+
+This license applies only to portions of the Software owned by the copyright
+holder. It does not relicense, replace, limit, or expand the rights or
+obligations governing third-party components, dependencies, or other material.
+Each remains under its own license, including its applicable attribution,
+copyright, and notice requirements. If a third-party license conflicts with
+this license, that third-party license governs that third-party material. You
+are responsible for complying with all applicable third-party terms.
+
+6. Previous Releases
+
+This license applies only to versions and portions expressly offered under it.
+It does not revoke or alter rights previously granted for earlier releases
+under MIT License or any other license. Those earlier releases remain
+available under their original terms.
+
+7. Termination
+
+Any rights granted to you under this license terminate automatically if you
+fail to comply with its terms. They may be reinstated only by written
+permission from the copyright holder.
+
+8. Disclaimer
+
+The Software is provided "AS IS", without warranties or conditions of any
+kind, express or implied, to the maximum extent permitted by law. The copyright
+holder is not liable for any claim, damages, or other liability arising from
+the Software or this license, to the maximum extent permitted by law.
+
+9. No Trademark Rights
+
+This license does not grant permission to use project names, logos, or
+trademarks except to provide the attribution required above.

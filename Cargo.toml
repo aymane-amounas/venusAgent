@@ -1,0 +1,45 @@
+[workspace]
+members = ["."]
+resolver = "3"
+
+[package]
+name = "venus-agent"
+version = "0.1.0"
+edition = "2024"
+default-run = "venus-agent"
+description = "User-controlled Rust AI agent runtime with terminal chat and bounded workspace capabilities"
+license = "LicenseRef-Aymane-Noncommercial-Attribution-1.0"
+license-file = "LICENSE"
+repository = "https://github.com/aymane-amounas/venusAgent"
+
+[[bin]]
+name = "venus-agent"
+path = "src/main.rs"
+
+[[bin]]
+name = "venus"
+path = "src/bin/venus.rs"
+
+[dependencies]
+anyhow = "1"
+async-trait = "0.1"
+clap = { version = "4.5", features = ["derive"] }
+crossterm = { version = "0.28.1", features = ["event-stream"] }
+directories = "6"
+futures-util = "0.3"
+ignore = "0.4"
+ratatui = { version = "0.29.0", features = ["crossterm"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+ring = "0.17"
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-util = "0.7"
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
