@@ -24,6 +24,14 @@ Today, Venus provides provider-backed terminal chat, bounded workspace summary/f
 
 **Venus is an agent runtime in development, not yet a general-purpose autonomous coding agent.**
 
+## At a glance
+
+| Name | What it does | Stack | Demo |
+|---|---|---|---|
+| **Venus Agent** | Source-available Rust runtime for user-controlled AI agents: your models, bounded capabilities, permissions, and approvals | Rust · Ratatui · SQLite | [Console session](docs/demo.md) · [See it run](#see-it-run) |
+
+> No hosted link: Venus is a local terminal runtime. The reproducible local demo is the full console session in [`docs/demo.md`](docs/demo.md), summarized under [See it run](#see-it-run).
+
 > [!IMPORTANT]
 > Permission profiles and approvals are **application-level policies**, not OS-level security. Venus does not sandbox itself; a compromised process or a malicious local user can bypass them. See [Security considerations](#security-considerations) and [`SECURITY.md`](SECURITY.md).
 
