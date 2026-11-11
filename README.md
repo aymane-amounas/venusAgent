@@ -41,6 +41,69 @@ Today, Venus provides provider-backed terminal chat, bounded workspace summary/f
 
 **Provider verification:** Ollama passed real local inference, including fresh setup. OpenAI, Anthropic, Gemini, and OpenRouter have deterministic mocked HTTP test coverage only; no real cloud credentials or vendor inference have been verified. These cloud integrations are not independently verified as production-ready.
 
+## See it run
+
+A real session: a write is denied without a grant, then needs approval for its exact arguments, then runs and is audited.
+
+```console
+$ venus-agent capability run workspace.file-replace replace --input "$INPUT"
+Proposed replacement:
+-     // TODO: handle config errors
++     // Config errors are handled in load_config()
+Error: Capability request denied: No active grant covers this capability version, operation, and required permissions
+
+$ venus-agent permission grant workspace.file-replace 1.0.0 replace --permission workspace.write
+Created grant #1.
+
+$ venus-agent capability run workspace.file-replace replace --input "$INPUT"
+Approval required for request #6: A request-specific user approval is required
+
+$ venus-agent permission approve 1
+Approved request #6 for workspace.file-replace operation replace; the approval is single-request and no operation was executed.
+
+$ venus-agent capability run workspace.file-replace replace --input "$INPUT" --approval-id 1
+Completed capability request #6:
+{ "path": "src/main.rs", "sha256": "8b43b323…", "size_bytes": 87 }
+
+$ venus-agent permission audit
+… decision=allowed  reason=The active grant and matching request-specific user approval authorize this request status=completed
+… decision=approved reason=User approved this exact capability request status=approved
+… decision=approval_required status=proposed
+… decision=denied   reason=No active grant covers this capability version, operation, and required permissions status=denied
+```
+
+Output trimmed for length. The full, unedited session is in [`docs/demo.md`](docs/demo.md).
+
+## Tested
+
+**101 tests** (`cargo test --locked`), all deterministic, no network or credentials needed:
+
+| Module | Tests | Covers |
+|---|---:|---|
+| `provider` | 26 | Request/stream parsing for every adapter against local mock HTTP servers, cancellation, timeouts |
+| CLI + terminal chat | 18 | Setup wizard, model switching, slash commands, approval and preview flows in chat |
+| `database` | 14 | SQLite state, grants, approvals, audit events |
+| `config` | 12 | Atomic saves, validation, rejecting credentials in URLs and plaintext remote endpoints |
+| `orchestrator` | 11 | Authorization → execution → audit lifecycle, cancellation, failures |
+| `repository` | 11 | Workspace visibility rules, bounded reads and search |
+| `permissions` | 6 | Open / Controlled / Restricted decisions, argument summaries never leak values |
+| `capability` | 3 | Registry and descriptors |
+
+Line coverage is not measured yet.
+
+**Provider compatibility**
+
+| Provider | Implemented | Mock-tested | Verified with real inference |
+|---|:---:|:---:|---|
+| Ollama | ✅ | ✅ | ✅ `qwen3.5:0.8b`, `qwen3.5:2b`, `qwen2.5-coder:3b` |
+| OpenAI | ✅ | ✅ | ❌ not yet |
+| Anthropic | ✅ | ✅ | ❌ not yet |
+| Google Gemini | ✅ | ✅ | ❌ not yet |
+| OpenRouter | ✅ | ✅ (shared OpenAI-compatible adapter) | ❌ not yet |
+| Azure OpenAI | ❌ | — | — |
+
+Platform: verified on macOS (Apple Silicon). Linux and Windows are not yet validated. Details: [`docs/providers.md`](docs/providers.md).
+
 ## Get started
 
 ### 1. Install
