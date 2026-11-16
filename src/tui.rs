@@ -251,7 +251,9 @@ async fn run_loop(
                         bail!("Terminal input stream closed unexpectedly");
                     };
                     let event = event.context("Could not read terminal input")?;
-                    if let Event::Key(key) = event {
+                    if let Event::Key(key) = event
+                        && key.kind == KeyEventKind::Press
+                    {
                         if is_ctrl_c(key) {
                             if active.cancel_requested {
                                 return Ok(());
