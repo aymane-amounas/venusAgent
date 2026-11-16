@@ -9,7 +9,6 @@ edition = "2024"
 default-run = "venus-agent"
 description = "User-controlled Rust AI agent runtime with terminal chat and bounded workspace capabilities"
 license = "LicenseRef-Aymane-Noncommercial-Attribution-1.0"
-license-file = "LICENSE"
 repository = "https://github.com/aymane-amounas/venusAgent"
 
 [[bin]]
