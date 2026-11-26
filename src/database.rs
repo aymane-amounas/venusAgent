@@ -7,6 +7,7 @@ use crate::{
     },
 };
 use anyhow::{Context, Result, bail};
+use ring::digest::{SHA256, digest};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::fs;
 use std::path::Path;
@@ -19,6 +20,17 @@ pub struct Task {
     pub description: String,
     pub status: String,
     pub created_at: String,
+}
+
+/// Result of replaying the capability audit hash chain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuditChainStatus {
+    /// Every row's hash recomputes from the previous row. `head` is the newest
+    /// row's hash; store it externally to also detect truncation of recent rows.
+    Intact { entries: usize, head: String },
+    /// The chain stops recomputing at row `broken_at`; `verified` rows before it
+    /// are consistent. Earlier rows were edited, deleted, or reordered.
+    Broken { verified: usize, broken_at: i64 },
 }
 
 pub struct Database {
@@ -131,6 +143,8 @@ impl Database {
         input_tokens: Option<u64>,
         output_tokens: Option<u64>,
     ) -> Result<()> {
+        let input_tokens = input_tokens.map(|count| count as i64);
+        let output_tokens = output_tokens.map(|count| count as i64);
         self.connection
             .execute(
                 "INSERT INTO model_interactions (provider, model, input_tokens, output_tokens)
@@ -749,6 +763,47 @@ impl Database {
             .context("Could not read capability audit records")
     }
 
+    /// Replay the capability audit hash chain and report whether it is intact.
+    pub fn verify_audit_chain(&self) -> Result<AuditChainStatus> {
+        let rows = {
+            let mut statement = self
+                .connection
+                .prepare(
+                    "SELECT id, request_id, capability_id, capability_version, operation,
+                            argument_summary, permission_profile, authorization_decision,
+                            decision_reason, approval_id, status, error_classification,
+                            created_at, entry_hash
+                     FROM capability_audit ORDER BY id",
+                )
+                .context("Could not prepare audit chain query")?;
+            statement
+                .query_map([], |row| {
+                    let stored: String = row.get(13)?;
+                    audit_chain_row(row).map(|(id, record)| (id, record, stored))
+                })
+                .context("Could not read the audit chain")?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .context("Could not read audit chain records")?
+        };
+        let mut previous = String::new();
+        let mut verified = 0;
+        for (id, record, stored) in rows {
+            let expected = audit_entry_hash(&previous, &record.fields());
+            if expected != stored {
+                return Ok(AuditChainStatus::Broken {
+                    verified,
+                    broken_at: id,
+                });
+            }
+            previous = stored;
+            verified += 1;
+        }
+        Ok(AuditChainStatus::Intact {
+            entries: verified,
+            head: previous,
+        })
+    }
+
     pub fn record_execution_event(
         &self,
         request_id: i64,
@@ -957,29 +1012,22 @@ impl Database {
                 bail!("Approval state cannot be recorded as a user decision")
             }
         };
-        self.connection
-            .execute(
-                "INSERT INTO capability_audit (
-                    request_id, capability_id, capability_version, operation,
-                    argument_summary, permission_profile, authorization_decision,
-                    decision_reason, approval_id, status, error_classification, created_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                params![
-                    approval.request_id,
-                    approval.capability_id,
-                    approval.capability_version,
-                    approval.operation,
-                    approval.argument_summary,
-                    profile.as_str(),
-                    decision,
-                    decision_reason,
-                    approval.id,
-                    status.as_str(),
-                    classification,
-                    now
-                ],
-            )
-            .context("Could not persist approval audit event")?;
+        append_audit(
+            &self.connection,
+            Some(approval.request_id),
+            &approval.capability_id,
+            &approval.capability_version,
+            &approval.operation,
+            &approval.argument_summary,
+            profile.as_str(),
+            decision,
+            decision_reason,
+            Some(approval.id),
+            status.as_str(),
+            classification,
+            now,
+        )
+        .context("Could not persist approval audit event")?;
         Ok(())
     }
 
@@ -1005,30 +1053,22 @@ impl Database {
         classification: Option<&str>,
         now: i64,
     ) -> Result<i64> {
-        self.connection
-            .execute(
-                "INSERT INTO capability_audit (
-                    request_id, capability_id, capability_version, operation,
-                    argument_summary, permission_profile, authorization_decision,
-                    decision_reason, approval_id, status, error_classification, created_at
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-                params![
-                    previous.request_id,
-                    previous.capability_id,
-                    previous.capability_version,
-                    previous.operation,
-                    previous.argument_summary,
-                    previous.permission_profile.as_str(),
-                    previous.authorization_decision,
-                    previous.decision_reason,
-                    previous.approval_id,
-                    status.as_str(),
-                    classification,
-                    now
-                ],
-            )
-            .context("Could not append capability audit event")?;
-        Ok(self.connection.last_insert_rowid())
+        let (id, _) = append_audit(
+            &self.connection,
+            Some(previous.request_id),
+            &previous.capability_id,
+            &previous.capability_version,
+            &previous.operation,
+            &previous.argument_summary,
+            previous.permission_profile.as_str(),
+            &previous.authorization_decision,
+            &previous.decision_reason,
+            previous.approval_id,
+            status.as_str(),
+            classification,
+            now,
+        )?;
+        Ok(id)
     }
 
     fn workspace_id(&self, root: &Path) -> Result<i64> {
@@ -1165,35 +1205,22 @@ fn insert_proposal(
     request: &CapabilityRequest,
     metadata: &AuditMetadata<'_>,
 ) -> Result<(i64, i64)> {
-    connection
-        .execute(
-            "INSERT INTO capability_audit (
-                request_id, capability_id, capability_version, operation,
-                argument_summary, permission_profile, authorization_decision,
-                decision_reason, approval_id, status, error_classification, created_at
-             ) VALUES (0, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'proposed', ?9, ?10)",
-            params![
-                sanitize_audit_text(&descriptor.id, 128),
-                sanitize_audit_text(&descriptor.version, 32),
-                sanitize_audit_text(&request.operation, 128),
-                metadata.summary,
-                metadata.profile.as_str(),
-                metadata.decision,
-                sanitize_audit_text(metadata.reason, 512),
-                metadata.approval_id,
-                metadata.classification,
-                metadata.now
-            ],
-        )
-        .context("Could not record capability proposal")?;
-    let id = connection.last_insert_rowid();
-    connection
-        .execute(
-            "UPDATE capability_audit SET request_id = ?1 WHERE id = ?1",
-            [id],
-        )
-        .context("Could not assign capability request identifier")?;
-    Ok((id, id))
+    append_audit(
+        connection,
+        None,
+        &sanitize_audit_text(&descriptor.id, 128),
+        &sanitize_audit_text(&descriptor.version, 32),
+        &sanitize_audit_text(&request.operation, 128),
+        metadata.summary,
+        metadata.profile.as_str(),
+        metadata.decision,
+        &sanitize_audit_text(metadata.reason, 512),
+        metadata.approval_id,
+        "proposed",
+        metadata.classification,
+        metadata.now,
+    )
+    .context("Could not record capability proposal")
 }
 
 fn insert_audit_event(
@@ -1204,30 +1231,22 @@ fn insert_audit_event(
     metadata: &AuditMetadata<'_>,
     status: CapabilityAuditStatus,
 ) -> Result<i64> {
-    connection
-        .execute(
-            "INSERT INTO capability_audit (
-                request_id, capability_id, capability_version, operation,
-                argument_summary, permission_profile, authorization_decision,
-                decision_reason, approval_id, status, error_classification, created_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
-            params![
-                request_id,
-                sanitize_audit_text(&descriptor.id, 128),
-                sanitize_audit_text(&descriptor.version, 32),
-                sanitize_audit_text(&request.operation, 128),
-                metadata.summary,
-                metadata.profile.as_str(),
-                metadata.decision,
-                sanitize_audit_text(metadata.reason, 512),
-                metadata.approval_id,
-                status.as_str(),
-                metadata.classification,
-                metadata.now
-            ],
-        )
-        .context("Could not append capability audit event")?;
-    Ok(connection.last_insert_rowid())
+    let (id, _) = append_audit(
+        connection,
+        Some(request_id),
+        &sanitize_audit_text(&descriptor.id, 128),
+        &sanitize_audit_text(&descriptor.version, 32),
+        &sanitize_audit_text(&request.operation, 128),
+        metadata.summary,
+        metadata.profile.as_str(),
+        metadata.decision,
+        &sanitize_audit_text(metadata.reason, 512),
+        metadata.approval_id,
+        status.as_str(),
+        metadata.classification,
+        metadata.now,
+    )?;
+    Ok(id)
 }
 
 fn latest_audit_id(connection: &Connection, request_id: i64) -> Result<i64> {
@@ -1238,6 +1257,179 @@ fn latest_audit_id(connection: &Connection, request_id: i64) -> Result<i64> {
             |row| row.get(0),
         )
         .context("Could not find capability audit request")
+}
+
+struct AuditChainFields<'a> {
+    request_id: i64,
+    capability_id: &'a str,
+    capability_version: &'a str,
+    operation: &'a str,
+    argument_summary: &'a str,
+    permission_profile: &'a str,
+    authorization_decision: &'a str,
+    decision_reason: &'a str,
+    approval_id: Option<i64>,
+    status: &'a str,
+    error_classification: Option<&'a str>,
+    created_at: i64,
+}
+
+struct AuditChainRecord {
+    request_id: i64,
+    capability_id: String,
+    capability_version: String,
+    operation: String,
+    argument_summary: String,
+    permission_profile: String,
+    authorization_decision: String,
+    decision_reason: String,
+    approval_id: Option<i64>,
+    status: String,
+    error_classification: Option<String>,
+    created_at: i64,
+}
+
+impl AuditChainRecord {
+    fn fields(&self) -> AuditChainFields<'_> {
+        AuditChainFields {
+            request_id: self.request_id,
+            capability_id: &self.capability_id,
+            capability_version: &self.capability_version,
+            operation: &self.operation,
+            argument_summary: &self.argument_summary,
+            permission_profile: &self.permission_profile,
+            authorization_decision: &self.authorization_decision,
+            decision_reason: &self.decision_reason,
+            approval_id: self.approval_id,
+            status: &self.status,
+            error_classification: self.error_classification.as_deref(),
+            created_at: self.created_at,
+        }
+    }
+}
+
+fn audit_chain_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<(i64, AuditChainRecord)> {
+    Ok((
+        row.get(0)?,
+        AuditChainRecord {
+            request_id: row.get(1)?,
+            capability_id: row.get(2)?,
+            capability_version: row.get(3)?,
+            operation: row.get(4)?,
+            argument_summary: row.get(5)?,
+            permission_profile: row.get(6)?,
+            authorization_decision: row.get(7)?,
+            decision_reason: row.get(8)?,
+            approval_id: row.get(9)?,
+            status: row.get(10)?,
+            error_classification: row.get(11)?,
+            created_at: row.get(12)?,
+        },
+    ))
+}
+
+/// Hash of one audit row, chained to the previous row's hash. Any edit, deletion,
+/// or reordering of earlier rows changes every later hash, so the chain no longer
+/// recomputes. A caller that keeps an external copy of the head hash can detect
+/// truncation of the newest rows as well.
+fn audit_entry_hash(previous: &str, fields: &AuditChainFields<'_>) -> String {
+    let payload = serde_json::to_vec(&(
+        previous,
+        fields.request_id,
+        fields.capability_id,
+        fields.capability_version,
+        fields.operation,
+        fields.argument_summary,
+        fields.permission_profile,
+        fields.authorization_decision,
+        fields.decision_reason,
+        fields.approval_id,
+        fields.status,
+        fields.error_classification,
+        fields.created_at,
+    ))
+    .expect("audit chain fields are always serializable");
+    digest(&SHA256, &payload)
+        .as_ref()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_audit(
+    connection: &Connection,
+    request_id: Option<i64>,
+    capability_id: &str,
+    capability_version: &str,
+    operation: &str,
+    argument_summary: &str,
+    permission_profile: &str,
+    authorization_decision: &str,
+    decision_reason: &str,
+    approval_id: Option<i64>,
+    status: &str,
+    error_classification: Option<&str>,
+    created_at: i64,
+) -> Result<(i64, i64)> {
+    let previous: String = connection
+        .query_row(
+            "SELECT entry_hash FROM capability_audit ORDER BY id DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .context("Could not read the audit chain head")?
+        .unwrap_or_default();
+    connection
+        .execute(
+            "INSERT INTO capability_audit (
+                request_id, capability_id, capability_version, operation,
+                argument_summary, permission_profile, authorization_decision,
+                decision_reason, approval_id, status, error_classification, created_at, entry_hash
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, '')",
+            params![
+                request_id.unwrap_or(0),
+                capability_id,
+                capability_version,
+                operation,
+                argument_summary,
+                permission_profile,
+                authorization_decision,
+                decision_reason,
+                approval_id,
+                status,
+                error_classification,
+                created_at
+            ],
+        )
+        .context("Could not append capability audit event")?;
+    let id = connection.last_insert_rowid();
+    let request_id = request_id.unwrap_or(id);
+    let hash = audit_entry_hash(
+        &previous,
+        &AuditChainFields {
+            request_id,
+            capability_id,
+            capability_version,
+            operation,
+            argument_summary,
+            permission_profile,
+            authorization_decision,
+            decision_reason,
+            approval_id,
+            status,
+            error_classification,
+            created_at,
+        },
+    );
+    connection
+        .execute(
+            "UPDATE capability_audit SET request_id = ?1, entry_hash = ?2 WHERE id = ?3",
+            params![request_id, hash, id],
+        )
+        .context("Could not seal capability audit event")?;
+    Ok((id, request_id))
 }
 
 fn sanitize_audit_text(value: &str, max_chars: usize) -> String {
@@ -1258,7 +1450,7 @@ fn migrate(connection: &Connection) -> Result<()> {
     let mut version: i64 = connection
         .query_row("PRAGMA user_version", [], |row| row.get(0))
         .context("Could not read database schema version")?;
-    if version > 3 {
+    if version > 4 {
         bail!("Database schema version {version} is newer than this application.");
     }
     if version == 0 {
@@ -1375,7 +1567,47 @@ fn migrate(connection: &Connection) -> Result<()> {
              COMMIT;",
             )
             .context("Could not migrate capability permissions and audit schema")?;
+        version = 3;
     }
+    if version == 3 {
+        connection
+            .execute_batch(
+                "BEGIN;
+             ALTER TABLE capability_audit ADD COLUMN entry_hash TEXT NOT NULL DEFAULT '';
+             COMMIT;",
+            )
+            .context("Could not add audit chain column")?;
+        backfill_audit_chain(connection).context("Could not backfill the audit chain")?;
+        connection
+            .pragma_update(None, "user_version", 4)
+            .context("Could not finalize audit chain migration")?;
+    }
+    Ok(())
+}
+
+fn backfill_audit_chain(connection: &Connection) -> Result<()> {
+    let rows = {
+        let mut statement = connection.prepare(
+            "SELECT id, request_id, capability_id, capability_version, operation,
+                    argument_summary, permission_profile, authorization_decision,
+                    decision_reason, approval_id, status, error_classification, created_at
+             FROM capability_audit ORDER BY id",
+        )?;
+        statement
+            .query_map([], audit_chain_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?
+    };
+    let transaction = connection.unchecked_transaction()?;
+    let mut previous = String::new();
+    for (id, record) in rows {
+        let hash = audit_entry_hash(&previous, &record.fields());
+        transaction.execute(
+            "UPDATE capability_audit SET entry_hash = ?1 WHERE id = ?2",
+            params![hash, id],
+        )?;
+        previous = hash;
+    }
+    transaction.commit()?;
     Ok(())
 }
 
@@ -1581,7 +1813,7 @@ mod tests {
         let version: i64 = database
             .connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))?;
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         assert_eq!(database.permission_profile()?, PermissionProfile::Open);
         database.record_model_interaction("test", "model", None, None)?;
         Ok(())
@@ -1888,6 +2120,66 @@ mod tests {
                 .resolve_approval(grant_expiring_id, true, 602)
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn audit_chain_detects_tampering_and_deletion() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let path = temp.path().join("state.sqlite3");
+        let database = Database::open(&path)?;
+        database.authorize_capability_for_execution(
+            &test_capability(),
+            &test_request(),
+            None,
+            100,
+        )?;
+        database.authorize_capability_for_execution(
+            &test_capability(),
+            &test_request(),
+            None,
+            101,
+        )?;
+        let intact = database.verify_audit_chain()?;
+        let (entries, head) = match intact {
+            AuditChainStatus::Intact { entries, head } => (entries, head),
+            AuditChainStatus::Broken { .. } => panic!("fresh chain must be intact"),
+        };
+        assert!(entries >= 4);
+        assert_eq!(head.len(), 64);
+
+        // Editing an audit row's recorded reason must break the chain.
+        database.connection.execute(
+            "UPDATE capability_audit SET decision_reason = 'forged' WHERE id = 1",
+            [],
+        )?;
+        assert!(matches!(
+            database.verify_audit_chain()?,
+            AuditChainStatus::Broken { broken_at: 1, .. }
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn audit_chain_detects_row_deletion() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        let database = Database::open(&temp.path().join("state.sqlite3"))?;
+        for now in 100..104 {
+            database.authorize_capability_for_execution(
+                &test_capability(),
+                &test_request(),
+                None,
+                now,
+            )?;
+        }
+        // Remove a middle row; the following row's prev hash no longer recomputes.
+        database
+            .connection
+            .execute("DELETE FROM capability_audit WHERE id = 2", [])?;
+        assert!(matches!(
+            database.verify_audit_chain()?,
+            AuditChainStatus::Broken { .. }
+        ));
         Ok(())
     }
 
