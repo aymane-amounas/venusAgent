@@ -8,7 +8,7 @@ use tracing_subscriber::EnvFilter;
 use venus_agent::{
     capability::CapabilityRequest,
     config::{AppConfig, AppPaths},
-    database::Database,
+    database::{AuditChainStatus, Database},
     orchestrator::{CapabilityOrchestrator, CapabilityRunResult, register_workspace_capabilities},
     permissions::{PermissionGrantDraft, PermissionProfile},
     provider::{self, ChatMessage, ChatRequest, ChatRole},
@@ -157,6 +157,9 @@ enum PermissionCommands {
     Audit {
         #[arg(long, default_value_t = 50)]
         limit: u32,
+        /// Replay the audit hash chain and report whether it is intact.
+        #[arg(long)]
+        verify: bool,
     },
 }
 
@@ -560,7 +563,25 @@ pub async fn run() -> Result<()> {
                     }
                     println!("Revoked approval #{approval_id}.");
                 }
-                PermissionCommands::Audit { limit } => {
+                PermissionCommands::Audit { limit, verify } => {
+                    if verify {
+                        match database.verify_audit_chain()? {
+                            AuditChainStatus::Intact { entries, head } => {
+                                println!(
+                                    "Audit chain intact: {entries} event(s) verified. head={head}"
+                                );
+                            }
+                            AuditChainStatus::Broken {
+                                verified,
+                                broken_at,
+                            } => {
+                                bail!(
+                                    "Audit chain broken at event #{broken_at}; {verified} earlier event(s) verified. Records were edited, deleted, or reordered."
+                                );
+                            }
+                        }
+                        return Ok(());
+                    }
                     let events = database.list_capability_audit(limit)?;
                     if events.is_empty() {
                         println!("No capability audit events exist.");
