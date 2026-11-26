@@ -1,14 +1,14 @@
 use crate::{
     capability::{CapabilityDescriptor, CapabilityEffect, CapabilityRequest},
     permissions::{
-        argument_summary, evaluate_authorization, request_fingerprint, ApprovalRecord,
-        ApprovalState, AuthorizationDecision, AuthorizationResult, CapabilityAuditRecord,
-        CapabilityAuditStatus, PermissionGrant, PermissionGrantDraft, PermissionProfile,
+        ApprovalRecord, ApprovalState, AuthorizationDecision, AuthorizationResult,
+        CapabilityAuditRecord, CapabilityAuditStatus, PermissionGrant, PermissionGrantDraft,
+        PermissionProfile, argument_summary, evaluate_authorization, request_fingerprint,
     },
 };
-use anyhow::{bail, Context, Result};
-use ring::digest::{digest, SHA256};
-use rusqlite::{params, Connection, OptionalExtension};
+use anyhow::{Context, Result, bail};
+use ring::digest::{SHA256, digest};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::fs;
 use std::path::Path;
 
@@ -401,8 +401,7 @@ impl Database {
                         let proposal = AuditMetadata {
                             profile,
                             decision: "denied",
-                            reason:
-                                "Approval expired, was revoked, or its grant is no longer active",
+                            reason: "Approval expired, was revoked, or its grant is no longer active",
                             classification: Some("approval_stale"),
                             approval_id: None,
                             summary: &summary,
@@ -1873,9 +1872,11 @@ mod tests {
         assert_eq!(database.permission_profile()?, PermissionProfile::Open);
         database.set_permission_profile(PermissionProfile::Controlled, 100)?;
         let id = database.create_permission_grant(&test_grant(false, Some(500)), 101)?;
-        assert!(database
-            .create_permission_grant(&test_grant(true, None), 102)
-            .is_err());
+        assert!(
+            database
+                .create_permission_grant(&test_grant(true, None), 102)
+                .is_err()
+        );
         drop(database);
 
         let database = Database::open(&path)?;
@@ -1909,9 +1910,16 @@ mod tests {
             AuthorizationDecision::RequiresApproval { .. }
         ));
         let approval_id = result.approval_id.context("missing approval id")?;
-        assert!(database
-            .record_execution_event(result.request_id, CapabilityAuditStatus::Started, None, 103)
-            .is_err());
+        assert!(
+            database
+                .record_execution_event(
+                    result.request_id,
+                    CapabilityAuditStatus::Started,
+                    None,
+                    103
+                )
+                .is_err()
+        );
         drop(database);
 
         let database = Database::open(&path)?;
@@ -1928,9 +1936,11 @@ mod tests {
             approvals[0].required_permissions,
             vec!["data.read".to_owned()]
         );
-        assert!(!approvals[0]
-            .argument_summary
-            .contains("sensitive-value-must-not-be-persisted"));
+        assert!(
+            !approvals[0]
+                .argument_summary
+                .contains("sensitive-value-must-not-be-persisted")
+        );
 
         let approved = database.resolve_approval(approval_id, true, 105)?;
         assert_eq!(approved.state, ApprovalState::Approved);
@@ -2105,9 +2115,11 @@ mod tests {
                 && event.status == CapabilityAuditStatus::Cancelled
                 && event.error_classification.as_deref() == Some("approval_revoked")
         }));
-        assert!(database
-            .resolve_approval(grant_expiring_id, true, 602)
-            .is_err());
+        assert!(
+            database
+                .resolve_approval(grant_expiring_id, true, 602)
+                .is_err()
+        );
         Ok(())
     }
 
@@ -2188,12 +2200,16 @@ mod tests {
         ));
         let audit = database.list_capability_audit(10)?;
         assert_eq!(audit.len(), 2);
-        assert!(audit
-            .iter()
-            .all(|record| !record.capability_id.contains('\u{1b}')));
-        assert!(audit
-            .iter()
-            .any(|record| record.status == CapabilityAuditStatus::Denied));
+        assert!(
+            audit
+                .iter()
+                .all(|record| !record.capability_id.contains('\u{1b}'))
+        );
+        assert!(
+            audit
+                .iter()
+                .any(|record| record.status == CapabilityAuditStatus::Denied)
+        );
         Ok(())
     }
 }
