@@ -1,6 +1,6 @@
 # Architecture, current status, and implementation plan
 
-This document records what the repository implements today, not the intended end state.
+This is a record of what the repository actually implements today, not where I want it to end up. When something is partial or missing, it says so.
 
 ## Current architecture
 
@@ -82,25 +82,25 @@ telemetry is collected by this application.
 | Project governance | Partial | Custom noncommercial attribution license, CI, contribution and security policies exist; release process, SBOM, and dependency-license audit remain |
 | Cross-platform validation | Partial | CI is configured for three operating systems; local verification only covers the current host |
 
-No unresolved architectural decision prevents completing the current reliability milestone. Provider protocol, credential handling, and capability ABI decisions should be recorded before those milestones begin.
+No open architectural decision is blocking the current reliability milestone. That said, I want the provider protocol, credential handling, and capability ABI decisions written down before those milestones start.
 
 ## Security and data-flow model
 
-- Workspace inventory runs locally and does not transmit file contents. File-read/search content is returned only after an explicit user action and is held in memory until a subsequent prompt sends it to the selected provider.
-- SQLite configuration and task state are stored in the user's operating-system data directories. Model interaction metadata is recorded without prompt or response bodies.
-- Interactive chat history is held in memory only, not saved in SQLite. The current conversation context is sent to the explicitly selected provider with each request; there is no automatic cloud fallback. No telemetry, account, hosted backend, or capability marketplace exists.
+- Workspace inventory runs locally and doesn't transmit file contents. File-read/search content comes back only after you take an explicit action, and it's held in memory until a later prompt sends it to the selected provider.
+- SQLite configuration and task state live in your operating-system data directories. Model interaction metadata is recorded without the prompt or response bodies.
+- Interactive chat history is in memory only, not in SQLite. The current conversation context goes to the provider you explicitly selected on each request, with no automatic cloud fallback. There's no telemetry, account, hosted backend, or capability marketplace.
 - Task data is isolated by canonical workspace path and SQL parameters.
-- Completed task records are retained indefinitely unless the user configures `task_retention_days`; pending work is never pruned by that setting.
-- Workspace inspection invokes a fixed Git subcommand, not a user-provided shell command. Git may still honor repository-local configuration such as filters; inspection is therefore for trusted repositories only.
-- There is no general filesystem mutation, command tool, model-driven action loop, sandbox, dynamic capability loader, or secure credential store. Workspace access is bounded; the only write is an exact single-line replacement requiring a grant and approval.
+- Completed task records are kept indefinitely unless you set `task_retention_days`; that setting never prunes pending work.
+- Workspace inspection runs a fixed Git subcommand, not a shell command you supply. Git can still honor repository-local configuration like filters, so this is for trusted repositories only.
+- There's no general filesystem mutation, command tool, model-driven action loop, sandbox, dynamic capability loader, or secure credential store. Workspace access is bounded, and the only write is an exact single-line replacement that needs a grant and approval.
 
-This is a local utility foundation, not a security sandbox or an autonomous agent.
+So treat this as a local utility foundation, not a security sandbox or an autonomous agent.
 
 ## User sovereignty and execution profiles
 
-The intended authority model is user-owned and local: no Venus Agent account, subscription, hosted control plane, or developer approval is required. Venus Agent must never silently elevate OS privileges. Its source-level rules cannot restrict an owner who can modify the source or operate the machine directly.
+The authority model I'm aiming for is user-owned and local: no Venus Agent account, subscription, hosted control plane, or developer approval. Venus must never silently elevate OS privileges. And its source-level rules can't restrict an owner who can modify the source or just operate the machine directly, so I don't pretend otherwise.
 
-The user can choose the implemented profiles for bounded workspace capabilities:
+You choose among the implemented profiles for the bounded workspace capabilities:
 
 | Profile | Implemented policy behavior for the bounded read-only executor |
 |---|---|
@@ -108,28 +108,28 @@ The user can choose the implemented profiles for bounded workspace capabilities:
 | **Controlled** | Requires a matching capability/version/operation/permission grant. Mutating requests always require approval; read-only grants can additionally require one. |
 | **Restricted** | Requires a matching grant and a new one-request user approval for every request. This is application policy, not OS isolation. |
 
-The active profile is visible through `venus-agent permission profile`; initialization and profile changes explain consequences. Regardless of profile, model output and other external content are untrusted data, not policy instructions. Open is the default. The bounded orchestrator consumes these policies for summary, file-read, search, and exact text replacement. See [capabilities-and-permissions.md](capabilities-and-permissions.md) for precise rules. These application rules are not a boundary against the machine owner or a substitute for OS permissions.
+The active profile shows up through `venus-agent permission profile`, and initialization and profile changes explain their consequences. In every profile, model output and other external content are untrusted data, not policy instructions. Open is the default. The bounded orchestrator uses these policies for summary, file-read, search, and exact text replacement. See [capabilities-and-permissions.md](capabilities-and-permissions.md) for the precise rules. These application rules are not a boundary against the machine owner, and they're not a substitute for OS permissions.
 
 ## Provider and local-model support
 
-See [providers.md](providers.md) for configuration, exact tested features, data flow, and manual integration steps. Cloud providers currently pass deterministic mocked protocol tests only; no real cloud credentials were used for this implementation. The OpenAI-compatible adapter was previously exercised against Ollama's compatibility endpoint, not a cloud provider. There is no automatic routing or fallback. Multimodal inputs, Azure OpenAI, and direct Codex authentication remain unsupported.
+See [providers.md](providers.md) for configuration, the exact tested features, the data flow, and the manual integration steps. The cloud providers pass deterministic mocked protocol tests only; no real cloud credentials went into this implementation. The OpenAI-compatible adapter has been exercised against Ollama's compatibility endpoint, not a cloud provider. There's no automatic routing or fallback. Multimodal inputs, Azure OpenAI, and direct Codex authentication are all still unsupported.
 
 ## Capability development and installation
 
-Third-party capabilities cannot currently be installed as executable integrations. The versioned executor contract and policy enforcement are present for trusted built-in Rust code only, but there is no loader, manifest protocol, dependency resolver, authenticity check, Python worker, or sandbox. Do not place executable plugins in this repository expecting them to load. A capability's declared permissions never grant it authority; the user must configure a grant and policy must evaluate it.
+You can't install third-party capabilities as executable integrations right now. The versioned executor contract and the policy enforcement exist for trusted built-in Rust code only. There's no loader, manifest protocol, dependency resolver, authenticity check, Python worker, or sandbox. So don't drop executable plugins into this repository expecting them to load. A capability's declared permissions never grant it any authority on their own; you have to configure a grant and policy has to evaluate it.
 
 ## Prioritized remaining work
 
-1. **Provider hardening:** add live, opt-in Ollama and compatible endpoint integration runs, timeout/auth/stream protocol edge-case tests, and configured metadata retention.
-2. **Provider verification:** live, opt-in vendor inference checks with user credentials; protocol-specific pagination, rate-limit and capability metadata improvements.
-3. **Model orchestration:** connect model-proposed tool calls to explicit requests only after defining turn limits, cancellation behavior, argument presentation, and safe handling of untrusted model output.
-4. **Coding capabilities:** bounded workspace reading/search and one exact single-line replacement with diff preview and approval are implemented; next add broader proposed edits and diffs. Preserve the Venus terminal mark and active-model/permission indicators as the interface grows. Keep arbitrary shell execution outside scope until its permission and OS boundaries are tested.
-5. **Controlled agent loop:** connect model tool calls only with explicit policies, turn limits, cancellation, verification, and recovery; report success only from observed outcomes.
-6. **Session persistence:** define explicit opt-in, retention, and deletion behavior before storing conversation content.
-7. **Python integration:** add an optional versioned worker protocol if a concrete integration requires it.
-8. **Distribution:** package releases, produce an SBOM, audit dependency licenses, and document migrations.
+1. Provider hardening: add live, opt-in Ollama and compatible-endpoint integration runs, timeout/auth/stream protocol edge-case tests, and configured metadata retention.
+2. Provider verification: live, opt-in vendor inference checks with real user credentials, plus protocol-specific pagination, rate-limit, and capability-metadata improvements.
+3. Model orchestration: connect model-proposed tool calls to explicit requests, but only after defining turn limits, cancellation behavior, argument presentation, and safe handling of untrusted model output.
+4. Coding capabilities: bounded reading/search and one exact single-line replacement with diff preview and approval are in; next come broader proposed edits and diffs. Keep the Venus terminal mark and the active-model/permission indicators as the interface grows. Leave arbitrary shell execution out of scope until its permission and OS boundaries are tested.
+5. Controlled agent loop: connect model tool calls only with explicit policies, turn limits, cancellation, verification, and recovery, and report success only from outcomes actually observed.
+6. Session persistence: define explicit opt-in, retention, and deletion behavior before storing any conversation content.
+7. Python integration: add an optional versioned worker protocol only if a concrete integration needs it.
+8. Distribution: package releases, produce an SBOM, audit dependency licenses, and document migrations.
 
-Each milestone needs integration and failure-path tests before the next gains authority or autonomy.
+The rule I'm holding myself to: each milestone needs integration and failure-path tests before the next one gains any authority or autonomy.
 
 ## Current capability setup
 
@@ -145,4 +145,4 @@ cargo run -- capability run workspace.file-read read --input '{"path":"src/main.
 cargo run -- capability run workspace.search search --input '{"query":"TODO","case_sensitive":false}'
 ```
 
-The inventory, task, and bounded read-only capability commands do not require a model. Provider commands require explicit configuration; see [providers.md](providers.md). No capability installation is available.
+The inventory, task, and bounded read-only capability commands don't need a model. Provider commands need explicit configuration; see [providers.md](providers.md). There's no capability installation.

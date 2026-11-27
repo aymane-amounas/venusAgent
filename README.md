@@ -16,13 +16,11 @@
   <img src="https://img.shields.io/badge/license-Noncommercial%20Attribution-blue" alt="Noncommercial Attribution License">
 </p>
 
-Venus Agent is source-available Rust infrastructure for user-controlled AI agents. It brings model providers, bounded capabilities, permissions, and approval workflows together, with an interactive terminal interface for using them.
+Venus Agent is a Rust runtime for AI agents that you control. The idea is simple: you pick the models, you decide what the runtime can touch, and you decide what it's allowed to do. It ties together model providers, bounded capabilities, permission profiles, and approval workflows, and it gives you a terminal interface to drive all of it.
 
-Choose your models, control what the runtime can access, and decide what it is allowed to do.
+I want to be honest about where this is. Today Venus gives you provider-backed terminal chat, a bounded workspace summary / file-read / search, and one narrow exact-text replacement that's gated behind a write grant and a fresh approval. General editing and running commands are not built yet.
 
-Today, Venus provides provider-backed terminal chat, bounded workspace summary/file-read/search, and one narrow exact-text replacement capability protected by a write grant and fresh approval. General editing and command execution are not implemented.
-
-**Venus is an agent runtime in development, not yet a general-purpose autonomous coding agent.**
+So treat Venus as an agent runtime in development, not a general-purpose autonomous coding agent.
 
 ## At a glance
 
@@ -30,28 +28,30 @@ Today, Venus provides provider-backed terminal chat, bounded workspace summary/f
 |---|---|---|---|
 | **Venus Agent** | Source-available Rust runtime for user-controlled AI agents: your models, bounded capabilities, permissions, and approvals | Rust · Ratatui · SQLite | [Console session](docs/demo.md) · [See it run](#see-it-run) |
 
-> No hosted link: Venus is a local terminal runtime. The reproducible local demo is the full console session in [`docs/demo.md`](docs/demo.md), summarized under [See it run](#see-it-run).
+> There's no hosted link, because Venus is a local terminal runtime. The reproducible demo is the full console session in [`docs/demo.md`](docs/demo.md), summarized under [See it run](#see-it-run).
 
 > [!IMPORTANT]
-> Permission profiles and approvals are **application-level policies**, not OS-level security. Venus does not sandbox itself; a compromised process or a malicious local user can bypass them. See [Security considerations](#security-considerations) and [`SECURITY.md`](SECURITY.md).
+> Permission profiles and approvals are **application-level policies**, not OS-level security. Venus doesn't sandbox itself, so a compromised process or a malicious local user can bypass them. See [Security considerations](#security-considerations) and [`SECURITY.md`](SECURITY.md).
 
 ## What works today
 
-- **Provider choices:** Ollama, OpenAI, Anthropic, Google Gemini, and OpenRouter, with provider-specific authentication and model discovery.
-- **Model configuration:** Choose providers and models through configuration.
-- **Streaming:** Asynchronous responses, cancellation, and request timeouts.
-- **Interactive chat:** A Ratatui terminal conversation with model switching and in-memory context.
-- **Capabilities:** A registry for describing and discovering available operations.
-- **Permissions:** Open, Controlled, and Restricted profiles.
-- **Approvals:** Scoped grants, revocation, expiration, and one-use approvals.
-- **Persistence:** SQLite-backed state, permission data, and audit history.
-- **Bounded workspace access:** Workspace summary, visible UTF-8 file reads, literal text search, and exact single-line replacement with explicit approval.
+Here's what's actually wired up right now:
 
-**Provider verification:** Ollama passed real local inference, including fresh setup. OpenAI, Anthropic, Gemini, and OpenRouter have deterministic mocked HTTP test coverage only; no real cloud credentials or vendor inference have been verified. These cloud integrations are not independently verified as production-ready.
+- Provider choices: Ollama, OpenAI, Anthropic, Google Gemini, and OpenRouter, each with its own authentication and model discovery.
+- Model configuration: you choose providers and models through configuration.
+- Streaming: asynchronous responses, cancellation, and request timeouts.
+- Interactive chat: a Ratatui terminal conversation with model switching and in-memory context.
+- Capabilities: a registry for describing and discovering the available operations.
+- Permissions: Open, Controlled, and Restricted profiles.
+- Approvals: scoped grants, revocation, expiration, and one-use approvals.
+- Persistence: SQLite-backed state, permission data, and audit history.
+- Bounded workspace access: workspace summary, visible UTF-8 file reads, literal text search, and exact single-line replacement with explicit approval.
+
+One caveat worth stating up front. Ollama is the only provider I've run real local inference against, including a fresh setup. OpenAI, Anthropic, Gemini, and OpenRouter have deterministic mocked HTTP tests only; no real cloud credentials or vendor inference have gone through them. So I don't consider those cloud integrations independently verified as production-ready.
 
 ## See it run
 
-A real session: a write is denied without a grant, then needs approval for its exact arguments, then runs and is audited.
+This is a real session: a write gets denied without a grant, then it needs approval for its exact arguments, then it runs and lands in the audit log.
 
 ```console
 $ venus-agent capability run workspace.file-replace replace --input "$INPUT"
@@ -80,24 +80,24 @@ $ venus-agent permission audit
 … decision=denied   reason=No active grant covers this capability version, operation, and required permissions status=denied
 ```
 
-Output trimmed for length. The full, unedited session is in [`docs/demo.md`](docs/demo.md).
+I trimmed the output here for length. The full, unedited session is in [`docs/demo.md`](docs/demo.md).
 
 ## Tested
 
-**101 tests** (`cargo test --locked`), all deterministic, no network or credentials needed:
+There are **103 tests** (`cargo test --locked`), all deterministic, with no network or credentials needed:
 
 | Module | Tests | Covers |
 |---|---:|---|
 | `provider` | 26 | Request/stream parsing for every adapter against local mock HTTP servers, cancellation, timeouts |
 | CLI + terminal chat | 18 | Setup wizard, model switching, slash commands, approval and preview flows in chat |
-| `database` | 14 | SQLite state, grants, approvals, audit events |
+| `database` | 16 | SQLite state, grants, approvals, audit events |
 | `config` | 12 | Atomic saves, validation, rejecting credentials in URLs and plaintext remote endpoints |
 | `orchestrator` | 11 | Authorization → execution → audit lifecycle, cancellation, failures |
 | `repository` | 11 | Workspace visibility rules, bounded reads and search |
 | `permissions` | 6 | Open / Controlled / Restricted decisions, argument summaries never leak values |
 | `capability` | 3 | Registry and descriptors |
 
-Line coverage is not measured yet.
+I don't measure line coverage yet.
 
 **Provider compatibility**
 
@@ -110,7 +110,7 @@ Line coverage is not measured yet.
 | OpenRouter | ✅ | ✅ (shared OpenAI-compatible adapter) | ❌ not yet |
 | Azure OpenAI | ❌ | — | — |
 
-Platform: verified on macOS (Apple Silicon). Linux and Windows are not yet validated. Details: [`docs/providers.md`](docs/providers.md).
+I've verified this on macOS (Apple Silicon). Linux and Windows aren't validated yet. More detail in [`docs/providers.md`](docs/providers.md).
 
 ## Get started
 
@@ -122,7 +122,7 @@ cd venusAgent
 ./scripts/install.sh
 ```
 
-On macOS and Linux, the installer offers to install the minimal Rust toolchain from the official Rustup site if it is missing, then builds and installs Venus Agent. It also checks for a native C compiler and gives platform-specific guidance if one is missing. Cargo fetches/builds Rust dependencies automatically; no separate database or Python installation is needed. The installed commands are in Cargo's binary directory (`~/.cargo/bin`). If that directory is not on `PATH`, the installer offers to add it to your zsh or bash startup file. Accept, then run the printed `source` command in the current terminal (or open a new terminal). If you decline or use another shell, add `~/.cargo/bin` to your `PATH` manually.
+On macOS and Linux, if the Rust toolchain is missing, the installer offers to install the minimal toolchain from the official Rustup site, then builds and installs Venus Agent. It also checks for a native C compiler and gives platform-specific guidance if one is missing. Cargo fetches and builds the Rust dependencies on its own; there's no separate database or Python install. The commands land in Cargo's binary directory (`~/.cargo/bin`). If that's not on your `PATH`, the installer offers to add it to your zsh or bash startup file. Accept, then run the printed `source` command in the current terminal (or open a new one). If you decline, or you use another shell, add `~/.cargo/bin` to your `PATH` yourself.
 
 On Windows, install Rust with [rustup.rs](https://rustup.rs), then run `cargo install --path . --locked` from the cloned repository.
 
@@ -132,9 +132,9 @@ venus-agent --help
 
 ### 2. Configure a model
 
-On first launch, Venus checks whether Ollama is running and has installed models. If so, it selects an available model (preferring a coding-named model) and configures it automatically. It never downloads a model. If Ollama is unavailable or has no models, you can configure a cloud provider or finish setup and do it later.
+On first launch, Venus checks whether Ollama is running and has models installed. If it does, Venus picks an available one (it prefers a coding-named model) and configures it automatically. It never downloads a model for you. If Ollama isn't there or has no models, you can set up a cloud provider or skip setup and do it later.
 
-Cloud setup supports OpenAI, Anthropic, Gemini, and OpenRouter. Set the provider's standard API-key environment variable before setup: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY`. Credentials stay out of TOML, but environment variables are not an OS keychain and may be accessible to other processes running as your user. Venus checks authentication and discovers models, then asks before sending one short inference request (provider usage may apply). Azure OpenAI and direct Codex authentication are not supported. Cloud adapters have mocked protocol tests only; they have not been verified with real cloud credentials or inference.
+Cloud setup covers OpenAI, Anthropic, Gemini, and OpenRouter. Set the provider's standard API-key environment variable before setup: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, or `OPENROUTER_API_KEY`. Credentials stay out of the TOML, but keep in mind an environment variable isn't an OS keychain and can be visible to other processes running as your user. Venus checks authentication, discovers models, then asks before sending one short inference request (provider usage may apply). Azure OpenAI and direct Codex authentication aren't supported. The cloud adapters have mocked protocol tests only; they haven't been run against real cloud credentials or inference.
 
 ### 3. Start chatting
 
@@ -144,18 +144,18 @@ From your project directory, start the interactive terminal:
 venus
 ```
 
-`venus` is the short command; `venus-agent` is also installed and can be used interchangeably. Both names run the same application and use the same configuration. The full-screen chat streams replies and shows the active provider, model, and permission profile beside the Venus mark. Type `/help` to see the in-chat commands:
+`venus` is the short command; `venus-agent` is also installed and does the same thing with the same configuration. The full-screen chat streams replies and shows the active provider, model, and permission profile next to the Venus mark. Type `/help` to see the in-chat commands:
 
 - `/model` or `/models` lists configured models; `/model <provider> <alias-or-model-id>` switches models.
-- `/providers` lists configured providers and whether required credential environment variables are set.
+- `/providers` lists configured providers and whether their credential environment variables are set.
 - `/provider test <name>` checks provider connectivity and model discovery; `/provider switch <name> <model>` switches models for the current chat.
 - `/permissions` explains the active capability permission profile.
-- `/summary` runs the existing bounded, read-only workspace summary. If policy requires approval, Venus shows the request scope and accepts `/approve <id>` or `/deny <id>`.
-- `/read <relative-path>` reads one visible UTF-8 file (up to 256 KiB); `/search <literal-query>` searches visible text files. Both use `workspace.read` permission policy. Results are added as untrusted in-memory context and sent to the selected provider only with your next prompt.
-- `/replace <path> <old text> => <new text>` previews one unique, single-line replacement. No file changes until you grant `workspace.write` and approve the exact request with `/approve <id>`.
+- `/summary` runs the bounded, read-only workspace summary. If policy requires approval, Venus shows the request scope and accepts `/approve <id>` or `/deny <id>`.
+- `/read <relative-path>` reads one visible UTF-8 file (up to 256 KiB); `/search <literal-query>` searches visible text files. Both use the `workspace.read` permission policy. Results are added as untrusted in-memory context and sent to the selected provider only with your next prompt.
+- `/replace <path> <old text> => <new text>` previews one unique, single-line replacement. Nothing changes on disk until you grant `workspace.write` and approve the exact request with `/approve <id>`.
 - `/clear` clears the in-memory conversation; `/exit` leaves the chat. `Ctrl-C` cancels a request or exits.
 
-The selected provider is explicit; if it is unavailable, Venus reports the error and does not silently fail over or send context to another provider. Chat history is held in memory only for the current run. It is not stored in SQLite; only provider/model and token-count metadata is persisted. Prior turns are sent only to the selected provider. Workspace access happens only after you explicitly use `/read`, `/search`, or `/replace`. Results enter model context only when you send your next prompt. `/replace` can make one exact, unique single-line replacement, but only after showing a diff and receiving a fresh approval. Venus does not run shell commands or execute model-proposed tool calls.
+The selected provider is explicit. If it's unavailable, Venus reports the error and doesn't silently fail over or send your context to a different provider. Chat history lives in memory for the current run only. It isn't stored in SQLite; only provider/model and token-count metadata is persisted. Earlier turns go only to the selected provider. Workspace access happens only when you explicitly use `/read`, `/search`, or `/replace`, and those results enter model context only when you send your next prompt. `/replace` can make one exact, unique single-line replacement, but only after showing a diff and getting a fresh approval. Venus doesn't run shell commands or execute model-proposed tool calls.
 
 ## Managing providers
 
@@ -171,29 +171,29 @@ venus provider switch <name> <model>
 venus provider remove <name> --yes
 ```
 
-`venus-agent` can be used in place of `venus` for all commands. Switching with `provider switch` sets the default for new chats. Provider failures never trigger automatic fallback. Existing CLI commands remain available, for example `venus-agent inspect` and `venus-agent capability list`.
+`venus-agent` works in place of `venus` everywhere. `provider switch` sets the default for new chats. Provider failures never trigger an automatic fallback. The existing CLI commands are all still there, for example `venus-agent inspect` and `venus-agent capability list`.
 
-OpenAI Codex CLI is a separate coding-agent runtime, not an ordinary model provider. OpenAI documents `codex exec` for programmatic use, but Venus does not delegate to it or reuse Codex's ChatGPT sign-in/API-key credentials. See [Codex authentication](https://developers.openai.com/codex/auth/), [Codex CLI](https://developers.openai.com/codex/cli/), and [Codex developer commands](https://developers.openai.com/codex/developer-commands/).
+A note on Codex, since people ask: OpenAI Codex CLI is a separate coding-agent runtime, not an ordinary model provider. OpenAI documents `codex exec` for programmatic use, but Venus doesn't delegate to it or reuse Codex's ChatGPT sign-in or API-key credentials. See [Codex authentication](https://developers.openai.com/codex/auth/), [Codex CLI](https://developers.openai.com/codex/cli/), and [Codex developer commands](https://developers.openai.com/codex/developer-commands/).
 
 ## Capabilities and permissions
 
-Venus separates what a model proposes from what the runtime is allowed to execute.
+The core idea here is that what a model proposes and what the runtime is allowed to execute are two different things.
 
-Every capability has a declared operation and effects. The runtime validates requests, evaluates permissions, handles required approvals, checks authorization again before execution, and records the outcome.
+Every capability declares its operation and its effects. The runtime validates the request, evaluates permissions, handles any required approval, checks authorization again right before execution, and records the outcome.
 
-Three permission profiles are available:
+There are three permission profiles:
 
 | Profile | Behavior |
 | --- | --- |
-| Open | Allows the available schema-valid read-only workspace capabilities without a Venus grant or approval. File replacement still requires a `workspace.write` grant and fresh exact-request approval. All operations remain subject to the process's OS permissions. |
+| Open | Allows the available schema-valid read-only workspace capabilities without a Venus grant or approval. File replacement still requires a `workspace.write` grant and a fresh exact-request approval. Everything stays subject to the process's OS permissions. |
 | Controlled | Requires a matching grant; a grant can additionally require per-request approval. |
 | Restricted | Requires a matching grant and a new exact-request approval for every run. |
 
-Permissions are application-level controls. They do not replace operating-system permissions or provide OS-level isolation.
+These are application-level controls. They don't replace operating-system permissions and they don't give you OS-level isolation.
 
 ### Try the current capability
 
-List available capabilities:
+List the available capabilities:
 
 ```bash
 venus-agent capability list
@@ -205,14 +205,14 @@ Run the workspace summary:
 venus-agent capability run workspace.summary summarize
 ```
 
-The read-only `workspace.file-read` and `workspace.search` capabilities can also be requested from the CLI with JSON input:
+The read-only `workspace.file-read` and `workspace.search` capabilities can also be driven from the CLI with JSON input:
 
 ```bash
 venus-agent capability run workspace.file-read read --input '{"path":"src/main.rs"}'
 venus-agent capability run workspace.search search --input '{"query":"TODO","case_sensitive":false}'
 ```
 
-Summary and search honor ignore rules and skip common generated directories. Reads reject hidden, ignored, generated, symlinked, and out-of-workspace files, are limited to 256 KiB, and stop their visibility scan after 100,000 files. Search is literal and bounded to 100,000 files, 16 MiB scanned data, 50 matches, and 512-byte snippets. `/replace` is the only write: one exact single-line replacement in a visible UTF-8 file up to 256 KiB. It refuses ambiguous or stale content and always requires a `workspace.file-replace` `workspace.write` grant plus fresh approval, including in Open profile. General edits, model-selected tools, and command execution are not available.
+Summary and search honor ignore rules and skip the usual generated directories. Reads reject hidden, ignored, generated, symlinked, and out-of-workspace files, cap out at 256 KiB, and stop their visibility scan after 100,000 files. Search is literal and bounded to 100,000 files, 16 MiB scanned, 50 matches, and 512-byte snippets. `/replace` is the only write there is: one exact single-line replacement in a visible UTF-8 file up to 256 KiB. It refuses ambiguous or stale content and always needs a `workspace.file-replace` `workspace.write` grant plus fresh approval, including in Open profile. General edits, model-selected tools, and command execution aren't available.
 
 ## How it works
 
@@ -239,15 +239,13 @@ flowchart TB
     EXEC -. "results are untrusted input,<br/>sent only on explicit user prompt" .-> PR
 ```
 
-Model-generated tool calls are not connected to the capability system. A user starts capability requests through the CLI or the interactive chat's `/summary`, `/read`, `/search`, or `/replace` commands; the runtime validates them and applies application-level permissions. File and search results are treated as untrusted input and enter provider context only after an explicit user prompt. The replacement path applies only after the user previews and approves the exact change.
+Model-generated tool calls aren't connected to the capability system. You start capability requests through the CLI or the chat's `/summary`, `/read`, `/search`, or `/replace` commands; the runtime validates them and applies the application-level permissions. File and search results are treated as untrusted input and reach provider context only after you send an explicit prompt. The replacement path runs only after you preview and approve the exact change.
 
-The architecture is designed to keep provider integration, capability definitions, authorization, and execution separate.
+The whole point of the layout is to keep provider integration, capability definitions, authorization, and execution separate from each other.
 
 ## Configuration
 
-Venus uses a local configuration file to define providers and models.
-
-Provider credentials are supplied through environment variables rather than being written directly into configuration files.
+Venus uses a local configuration file to define providers and models. Provider credentials come from environment variables rather than being written into the configuration files.
 
 See:
 
@@ -283,7 +281,7 @@ cargo clippy --all-targets --locked -- -D warnings
 
 ## Current scope and milestones
 
-Venus Agent is a developer preview. Its current execution scope is intentionally limited.
+Venus Agent is a developer preview, and the execution scope is deliberately small right now.
 
 | Milestone | Status | Outcome |
 | --- | --- | --- |
@@ -292,9 +290,10 @@ Venus Agent is a developer preview. Its current execution scope is intentionally
 | 3. Controlled agent loop | Later | Model-selected tools with turn limits, cancellation, verification, and recovery; no arbitrary shell by default. |
 | 4. Session persistence | Design first | Add only with explicit opt-in, retention, and deletion behavior. |
 
-Terminal identity is part of the product, not just decoration: future terminal milestones should preserve and refine the Venus mark and clear active-model/permission indicators.
+The terminal identity is part of the product to me, not just decoration, so future terminal milestones should keep and refine the Venus mark and the clear active-model and permission indicators.
 
-**Implemented:**
+What's implemented:
+
 - Provider infrastructure.
 - Interactive terminal chat with in-memory multi-turn context.
 - Capability registration and discovery.
@@ -302,7 +301,8 @@ Terminal identity is part of the product, not just decoration: future terminal m
 - SQLite persistence and metadata-only audit events.
 - Bounded workspace summary, visible file reads, literal text search, and exact single-line replacement protected by a write grant and explicit approval.
 
-**Not implemented:**
+What's not implemented:
+
 - Model-generated tool calls connected to the orchestrator.
 - Autonomous agent loops.
 - Arbitrary shell execution.
@@ -312,21 +312,21 @@ Terminal identity is part of the product, not just decoration: future terminal m
 
 ### Security considerations
 
-- Permission profiles are application policies, not security boundaries against a compromised process.
-- Audit records currently have indefinite retention and are not tamper-proof.
-- Request fingerprints may allow guessing low-entropy inputs by someone with database access.
-- Chat transcripts, prompts, and responses are not persisted; the chat's current-run context is held in memory and sent to the selected provider.
-- The latest release verification was performed on macOS; a complete cross-platform validation has not been completed.
+A few things I'd want you to know before trusting this with anything sensitive:
 
-Read [`SECURITY.md`](SECURITY.md) before using Venus in environments containing sensitive data.
+- Permission profiles are application policy, not a security boundary against a compromised process.
+- Audit records are kept indefinitely right now and are tamper-evident, not tamper-proof.
+- The request fingerprint could let someone with database access guess low-entropy inputs.
+- Chat transcripts, prompts, and responses aren't persisted; the chat's current-run context lives in memory and goes to the selected provider.
+- The latest release verification was on macOS; a full cross-platform validation isn't done.
+
+Read [`SECURITY.md`](SECURITY.md) before using Venus anywhere there's sensitive data.
 
 ## Roadmap
 
-Venus is being developed incrementally.
+I'm building Venus incrementally. The long-term direction is a user-controlled agent runtime where you choose your models, capabilities, integrations, execution environment, and how much autonomy to hand over.
 
-The long-term direction is a user-controlled agent runtime where people can choose their models, capabilities, integrations, execution environment, and autonomy.
-
-The priority is to make each layer understandable, testable, and secure before expanding what the agent can do.
+The priority is to make each layer understandable, testable, and secure before widening what the agent can do.
 
 ## Contributing
 
@@ -362,9 +362,7 @@ license.
 ---
 
 <p align="center">
-  Built with curiosity. Designed for user control.
-  <br><br>
-  **Venus Agent**
+  <strong>Venus Agent</strong>
 </p>
 
 ---

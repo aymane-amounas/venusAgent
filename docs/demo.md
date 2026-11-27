@@ -1,14 +1,14 @@
 # Venus CLI demonstration
 
-A real, unedited session recorded with `venus-agent 0.1.0` on macOS (Apple Silicon) on 2026-11-11. It ran in a fresh demo workspace with an isolated state directory and no model provider configured. Only the workspace path was shortened to `~/demo`.
+This is a real, unedited session I recorded with `venus-agent 0.1.0` on macOS (Apple Silicon) on 2026-11-11. It ran in a fresh demo workspace with an isolated state directory and no model provider configured. The only thing I changed was shortening the workspace path to `~/demo`.
 
-It shows the full lifecycle of one write:
+It walks through the full lifecycle of a single write:
 
-1. A read-only search runs immediately (Open profile).
-2. A file replacement is **denied**: no `workspace.write` grant exists.
-3. The user creates a scoped grant. The same request now **requires approval** for its exact arguments.
-4. The user approves; the rerun with `--approval-id` executes.
-5. Every step is recorded in the SQLite audit log (metadata only, no file content).
+1. A read-only search runs immediately, because the profile is Open.
+2. A file replacement gets denied, because there's no `workspace.write` grant.
+3. I create a scoped grant. The same request now requires approval for its exact arguments.
+4. I approve it; the rerun with `--approval-id` executes.
+5. Every step lands in the SQLite audit log, metadata only, no file content.
 
 `$INPUT` is:
 
@@ -16,7 +16,7 @@ It shows the full lifecycle of one write:
 {"path":"src/main.rs","expected_sha256":"<sha256 of the current file>","old_text":"    // TODO: handle config errors","new_text":"    // Config errors are handled in load_config()"}
 ```
 
-`expected_sha256` makes the replacement fail if the file changed after it was reviewed.
+The `expected_sha256` is there so the replacement fails if the file changed after it was reviewed.
 
 ## Session
 
@@ -128,4 +128,4 @@ event=2 request=1 workspace.search@1.0.0 operation=search profile=open decision=
 event=1 request=1 workspace.search@1.0.0 operation=search profile=open decision=allowed reason=Open profile adds no Venus permission or approval gate; operating-system permissions remain authoritative status=proposed approval=None error=None args=Object with 2 field(s): case_sensitive, query; other values omitted
 ```
 
-Reproduce it with any workspace: `venus-agent init`, then the commands above.
+To reproduce it in any workspace, run `venus-agent init`, then the commands above.
