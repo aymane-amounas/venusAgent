@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions are welcome. Keep changes focused, preserve the current Rust application as the single source of truth, and do not describe planned behavior as implemented.
+Contributions are welcome. Keep changes focused, treat the current Rust application as the single source of truth, and don't describe planned behavior as if it already works.
 
 ## Contributor rights and licensing
 
@@ -29,9 +29,9 @@ contributions or change the terms of earlier releases.
 
 ## Development setup
 
-Install a stable Rust toolchain with `rustfmt` and `clippy`. Git is optional for building, but is used by workspace inspection.
+Install a stable Rust toolchain with `rustfmt` and `clippy`. Git isn't required to build, but workspace inspection uses it.
 
-Before opening a pull request, run:
+Before you open a pull request, run these:
 
 ```sh
 cargo fmt --all -- --check
@@ -40,15 +40,14 @@ cargo test --locked
 cargo build --locked
 ```
 
-Add tests for behavior changes and failure cases. Keep user data and credentials out of fixtures and logs. Capability descriptors live in `src/capability.rs`, bounded orchestration in `src/orchestrator.rs`, profile/grant/approval policy in `src/permissions.rs`, and persistence in `src/database.rs`; keep provider code separate. Validate untrusted inputs at boundaries, do not persist raw capability arguments, and recheck authorization immediately before execution. Mutating capabilities must declare `workspace.write` and require both a matching grant and fresh exact-request approval in every profile. No third-party loader exists. Do not imply that a grant installs a capability or that application policy provides OS isolation.
+A few things I care about when reviewing. Add tests for behavior changes and for the failure cases, not just the happy path. Keep user data and credentials out of fixtures and logs. The code is laid out so each concern has a home: capability descriptors in `src/capability.rs`, bounded orchestration in `src/orchestrator.rs`, profile/grant/approval policy in `src/permissions.rs`, and persistence in `src/database.rs`; keep provider code separate from all of that. Validate untrusted inputs at the boundaries, don't persist raw capability arguments, and recheck authorization right before execution. Any mutating capability has to declare `workspace.write` and require both a matching grant and a fresh exact-request approval in every profile. There's no third-party loader, so don't write as if one exists, and don't imply that a grant installs a capability or that application policy gives you OS isolation.
 
 ## Pull requests
 
-- Explain the problem and the behavior change.
-- List the verification commands and their results.
+- Explain the problem and what behavior changed.
+- List the verification commands you ran and what they printed.
 - Call out platform limitations and security implications.
-- Do not include unrelated formatting or generated files.
-- Do not commit credentials, tokens, private data, or local application state.
+- Leave out unrelated formatting churn and generated files.
+- Don't commit credentials, tokens, private data, or local application state.
 
-See [docs/architecture.md](docs/architecture.md) for the current scope and prioritized gaps.
-See [docs/capabilities-and-permissions.md](docs/capabilities-and-permissions.md) for the contract and exact profile semantics.
+For the current scope and the prioritized gaps, see [docs/architecture.md](docs/architecture.md). For the exact capability contract and profile semantics, see [docs/capabilities-and-permissions.md](docs/capabilities-and-permissions.md).

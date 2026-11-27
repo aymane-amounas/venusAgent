@@ -1,18 +1,18 @@
 # Capability contracts and permission profiles
 
-Venus Agent includes provider-independent capability contracts, an in-memory registry, a bounded orchestrator, permission policy, request-scoped approvals, and SQLite audit history. Its executable capability set contains bounded, read-only workspace summary/read/search operations and one narrowly-scoped mutating operation: exact single-line text replacement. Model-generated tool calls are not connected to this runtime; there is no dynamic plugin loader, shell capability, general filesystem mutation, or autonomous agent loop.
+Venus Agent ships provider-independent capability contracts, an in-memory registry, a bounded orchestrator, permission policy, request-scoped approvals, and SQLite audit history. The capabilities that can actually run are the bounded read-only workspace summary/read/search operations and one narrow mutating operation: exact single-line text replacement. Model-generated tool calls aren't connected to this runtime, and there's no dynamic plugin loader, shell capability, general filesystem mutation, or autonomous agent loop.
 
 ## Trust and request lifecycle
 
-The layers have separate responsibilities:
+Each layer has one job, and I kept them separate on purpose:
 
-1. **Provider** generates model output. Provider identity never grants a capability.
-2. **Orchestrator** accepts an explicit `CapabilityRequest`, displays its declared effects, checks policy, and invokes an eligible executor.
-3. **Capability contract** describes declared operations, effects, whether an operation is read-only or mutating, input/output/configuration schemas, lifecycle state, dependencies, and required permissions.
-4. **Permission policy** validates the request against the registered descriptor, profile, active version-bound grants, and any exact-request approval.
-5. **Executor** runs only after a fresh authorization decision. Mutating workspace capabilities must declare `workspace.write`, have an active user grant, and receive fresh exact-request approval in every profile; operating-system permissions remain authoritative.
+1. The provider generates model output. Provider identity never grants a capability.
+2. The orchestrator accepts an explicit `CapabilityRequest`, shows its declared effects, checks policy, and invokes an eligible executor.
+3. The capability contract describes the declared operations, the effects, whether an operation is read-only or mutating, the input/output/configuration schemas, the lifecycle state, dependencies, and required permissions.
+4. The permission policy validates the request against the registered descriptor, the profile, the active version-bound grants, and any exact-request approval.
+5. The executor runs only after a fresh authorization decision. A mutating workspace capability has to declare `workspace.write`, have an active user grant, and get a fresh exact-request approval in every profile. OS permissions are still the ones that actually matter.
 
-Model text, web content, files, arguments, and third-party data remain untrusted. Schema validation checks structure and types, not intent or safety.
+Model text, web content, files, arguments, and third-party data all stay untrusted. Schema validation checks structure and types, not intent or safety.
 
 ## Capability contract
 
@@ -28,9 +28,9 @@ Model text, web content, files, arguments, and third-party data remain untrusted
 - Permission requirements with descriptions and a sensitivity flag.
 - Registry registration, lookup, deterministic discovery, and state updates.
 
-The schema validator supports a deliberately small JSON Schema subset: `type`, `description`, `enum`, `properties`, `required`, `items`, and boolean `additionalProperties`. Unsupported schema keywords are rejected instead of silently ignored. Schemas use `serde_json::Value`; this is structural validation, not a complete JSON Schema implementation.
+The schema validator supports a deliberately small JSON Schema subset: `type`, `description`, `enum`, `properties`, `required`, `items`, and boolean `additionalProperties`. Anything outside that gets rejected rather than silently ignored. Schemas use `serde_json::Value`, so this is structural validation, not a full JSON Schema implementation.
 
-The registry rejects duplicate capability identifiers. It remains in-memory, and only trusted Rust code built into Venus Agent is registered. There is no dynamic registration protocol, install/update/remove workflow, Python worker, or external capability loader. Dependencies are declared but not resolved or installed.
+The registry rejects duplicate capability identifiers. It stays in memory, and the only things registered are trusted Rust built into Venus itself. There's no dynamic registration protocol, no install/update/remove workflow, no Python worker, and no external loader. Dependencies are declared but not resolved or installed.
 
 The bounded runtime registers these operations:
 
@@ -39,7 +39,7 @@ The bounded runtime registers these operations:
 - `workspace.search search` performs literal text search over visible UTF-8 files, skipping binary content. It scans at most 100,000 files and 16 MiB, returns at most 50 matches, and truncates each result line to 512 bytes. Returned workspace-relative paths use `/` on every platform.
 - `workspace.file-replace replace` previews/applies one unique exact single-line replacement in a visible UTF-8 file up to 256 KiB. It binds approval to the current file digest and requested old/new text, rejects stale content, and atomically replaces the file only after explicit approval.
 
-The ignore walker may read applicable ignore-rule files to determine which paths to skip. Workspace paths and request inputs are bound to approval fingerprints so an approval cannot be reused for a different action; raw request values and file contents are not stored in audit records. In the interactive chat, a file or search result remains in memory and is sent to the selected provider only when the user sends a subsequent prompt.
+The ignore walker reads the applicable ignore-rule files to figure out which paths to skip. Workspace paths and request inputs are bound to approval fingerprints, so an approval can't be reused for a different action, and raw request values and file contents never go into audit records. In the chat, a file or search result stays in memory and reaches the selected provider only when you send a following prompt.
 
 ```sh
 venus-agent capability list
@@ -50,7 +50,7 @@ venus-agent capability run workspace.search search --workspace . \
   --input '{"query":"TODO","case_sensitive":false}'
 ```
 
-In every profile, the replacement requires a `workspace.write` grant and an exact approval. Read-only capabilities follow the selected profile; in Controlled mode, a grant can require approval, and Restricted always requires it:
+In every profile, the replacement needs a `workspace.write` grant and an exact approval. The read-only capabilities follow whichever profile you've selected: in Controlled a grant can require approval, and Restricted always requires it:
 
 ```sh
 venus-agent permission profile controlled
@@ -71,7 +71,7 @@ venus-agent capability run workspace.file-replace replace --workspace . \
 
 ## Profiles
 
-The active profile is stored in the local SQLite database. A newly initialized or migrated database defaults to **Open**, not Restricted. Check or change it with:
+The active profile lives in the local SQLite database. A freshly initialized or migrated database defaults to **Open**, not Restricted. Check or change it with:
 
 ```sh
 venus-agent permission profile
@@ -80,7 +80,7 @@ venus-agent permission profile controlled
 venus-agent permission profile restricted
 ```
 
-Changing the profile changes only that setting. It does not edit grants or operating-system permissions. Pending/approved requests bound to a different profile are expired. The CLI explains the selected profile before applying the change.
+Changing the profile changes only that setting. It doesn't touch your grants or your OS permissions. Pending or approved requests that were bound to a different profile get expired. The CLI explains the profile you picked before it applies the change.
 
 | Profile | Venus policy behavior |
 |---|---|
@@ -88,7 +88,7 @@ Changing the profile changes only that setting. It does not edit grants or opera
 | **Controlled** | Denies requests without an active grant matching capability ID, exact version, exact operation, and every declared permission requirement. Mutating capabilities additionally require approval; a read-only grant can also require approval. |
 | **Restricted** | Requires the same explicit matching grant as Controlled and requires a fresh, request-specific user approval for every request. This is an application policy, not stronger OS isolation; isolation is not implemented. |
 
-`disabled` and `unavailable` capabilities are not authorized in any profile. Disabled is an explicit capability lifecycle/configuration choice; unavailable means the integration cannot currently operate. In Open, Venus does not impose grant or approval gates on an available capability.
+`disabled` and `unavailable` capabilities aren't authorized in any profile. Disabled is a deliberate lifecycle/configuration choice; unavailable means the integration can't currently operate. In Open, Venus adds no grant or approval gate on an available capability.
 
 Manage grants without editing the provider TOML:
 
@@ -101,7 +101,7 @@ venus-agent permission grants
 venus-agent permission revoke 1
 ```
 
-Grants are scoped to one capability version and one exact operation; wildcard grants are not supported. Permission identifiers must cover all requirements declared by the descriptor. Grants do not install or activate capabilities. Revoking a grant invalidates associated pending and approved requests.
+Grants are scoped to one capability version and one exact operation; there are no wildcard grants. The permission identifiers have to cover every requirement the descriptor declares. A grant doesn't install or activate a capability. Revoking a grant invalidates the pending and approved requests tied to it.
 
 ## Approval primitives
 
@@ -115,7 +115,7 @@ An approval record binds:
 - The grant and profile that produced the request.
 - `single_request` scope and a five-minute expiry.
 
-The user, not the model, resolves an approval:
+You resolve an approval, not the model:
 
 ```sh
 venus-agent permission approvals
@@ -124,9 +124,9 @@ venus-agent permission deny 12
 venus-agent permission revoke-approval 12
 ```
 
-Approvals become unusable when denied, revoked, expired, consumed, when their grant is revoked/expired, or when the profile changes. An approved request must be revalidated against the current descriptor and grant before policy returns `Allowed`; the approval is then consumed and cannot authorize a different request or be reused.
+An approval stops being usable once it's denied, revoked, expired, or consumed, once its grant is revoked or expired, or once the profile changes. Before policy returns `Allowed`, an approved request gets revalidated against the current descriptor and grant; the approval is then consumed and can't authorize a different request or be reused.
 
-`capability run` presents the action, operation, workspace, effect class, effects, safe argument summary, and required permissions before policy evaluation. In Controlled or Restricted mode, when approval is required, the command persists a pending request and prints its ID; the user reviews and approves it separately, then reruns the same request with `--approval-id`. The orchestrator revalidates the exact request and current grant/profile immediately before invoking the capability. For an allowed request, the final policy check, approval consumption, and `started` audit event are committed together before execution, preventing a grant/profile change between those checks from authorizing a stale request. Open adds no approval prompt; it still displays the proposed action and proceeds only when the process and OS permit it. Model-proposed tool calls are not currently converted to capability requests.
+`capability run` shows the action, operation, workspace, effect class, effects, safe argument summary, and required permissions before any policy evaluation. In Controlled or Restricted mode, when approval is required, the command persists a pending request and prints its ID; you review and approve it separately, then rerun the same request with `--approval-id`. The orchestrator revalidates the exact request and the current grant/profile right before invoking the capability. For an allowed request, the final policy check, the approval consumption, and the `started` audit event are committed together before execution, so a grant or profile change slipped in between those checks can't authorize a stale request. Open adds no approval prompt; it still displays the proposed action and only proceeds when the process and the OS permit it. Model-proposed tool calls aren't converted to capability requests yet.
 
 ## Audit records and data handling
 
@@ -136,20 +136,22 @@ Inspect metadata-only events with:
 venus-agent permission audit --limit 50
 ```
 
-Audit events distinguish `proposed`, `denied`, `approved`, `started`, `completed`, `failed`, and `cancelled`, and include the profile, decision/reason, capability/version, operation, approval reference, safe argument summary, timestamp, and a bounded error classification. Invalid lifecycle transitions are rejected. The workspace-summary executor emits start and terminal events; other capability execution remains unsupported.
+Audit events distinguish `proposed`, `denied`, `approved`, `started`, `completed`, `failed`, and `cancelled`, and each one carries the profile, the decision and reason, the capability and version, the operation, the approval reference, the safe argument summary, a timestamp, and a bounded error classification. Invalid lifecycle transitions are rejected. The workspace-summary executor emits start and terminal events; other capability execution isn't supported here yet.
 
-Raw input values, prompts, and model responses are not written to capability approvals or audit rows. The SHA-256 request fingerprint is persisted to enforce exact-request matching; it is not an authorization secret and may allow guessing low-entropy inputs to someone who can read the local database. Use care with sensitive capability arguments. The safe summary shows sanitized field names and a sanitized workspace basename, not its full path or other values.
+Raw input values, prompts, and model responses never land in capability approvals or audit rows. The SHA-256 request fingerprint is persisted so exact-request matching can be enforced; it isn't an authorization secret, and someone who can read the local database could use it to guess low-entropy inputs, so be careful with sensitive capability arguments. The safe summary shows sanitized field names and a sanitized workspace basename, not the full path or any values.
 
-Grant, approval, profile, and audit data is local SQLite state. Existing database schema versions are migrated to version 3; old databases receive the Open profile and empty capability tables without losing existing workspace, task, or provider metadata. The provider TOML format is unchanged. Audit history currently has no retention/pruning setting and is retained until the user removes local database records. It is not tamper-proof against the machine owner.
+Grant, approval, profile, and audit data is all local SQLite state. Older schema versions are migrated to version 3; old databases get the Open profile and empty capability tables without losing existing workspace, task, or provider metadata. The provider TOML format doesn't change. Audit history has no retention or pruning setting right now and sticks around until you remove the local database records. It is not tamper-proof against the machine's owner.
 
 ## Security boundaries and remaining work
 
-- Application-level profiles are policy, not a security boundary against a user who controls the machine or can modify Venus.
-- Venus never elevates OS privileges. Future executors must run with the actual process permissions and handle OS denials explicitly.
-- Open must remain free of Venus Agent approval gates; it must never be presented as protected isolation.
-- Controlled and Restricted currently gate capability/version/operation/permission IDs, not fine-grained resource boundaries. There are no network, process, or OS isolation policies.
-- Authorization is rechecked immediately before the current read-only executor is invoked. There is no general in-flight revocation mechanism for future long-running capabilities.
-- Registry descriptors and permission requirements do not prove that an implementation behaves as declared. There is no plugin authenticity, code identity, dependency resolver, or process isolation.
-- Future capabilities must treat inputs and external content as untrusted, validate semantics in addition to shape, avoid leaking secrets through errors/logs, and never treat model output or prior approvals as user authorization.
+A few limits worth being upfront about, and what's still left to build:
 
-Next, connect model-proposed tool calls to explicit user-reviewed requests only after defining turn limits, cancellation behavior, argument presentation, and safe handling of untrusted model output. Do not add general file mutation or shell execution until revocation, isolation, audit retention, and OS-boundary behavior are tested.
+- Application-level profiles are policy, not a security boundary against someone who controls the machine or can modify Venus.
+- Venus never elevates OS privileges. Future executors have to run with the real process permissions and handle OS denials explicitly.
+- Open stays free of Venus approval gates, and it must never be presented as protected isolation.
+- Controlled and Restricted currently gate capability/version/operation/permission IDs, not fine-grained resource boundaries. There are no network, process, or OS isolation policies.
+- Authorization is rechecked right before the current read-only executor runs. There's no general in-flight revocation yet for future long-running capabilities.
+- Registry descriptors and permission requirements don't prove that an implementation behaves the way it declares. There's no plugin authenticity, code identity, dependency resolver, or process isolation.
+- Future capabilities have to treat inputs and external content as untrusted, validate semantics on top of shape, avoid leaking secrets through errors or logs, and never treat model output or a prior approval as your authorization.
+
+What's next: connect model-proposed tool calls to explicit, user-reviewed requests, but only after defining turn limits, cancellation behavior, argument presentation, and safe handling of untrusted model output. And no general file mutation or shell execution until revocation, isolation, audit retention, and OS-boundary behavior are tested.
